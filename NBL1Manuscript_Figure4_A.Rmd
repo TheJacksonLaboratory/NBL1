@@ -1,0 +1,200 @@
+---
+title: "NBL1Manuscript_Figure4_A"
+author: "Courtney Willey"
+date: "2025-11-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in Mouse Models of Kidney Disease, but is Not Causal.
+
+# Figure 4. RNA Sequencing Analysis of Nbl1 Knockout Mice with Glomerular or Tubular Damage.
+XLAS Model
+
+```{r Install}
+install.packages("Biobase")
+install.packages("limma")
+install.packages("edgeR")
+install.packages("ggplot2")
+install.packages("ggrepel")
+install.packages("RColorBrewer")
+BiocManager::install("clusterProfiler")
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("EnhancedVolcano")
+```
+
+```{r Load}
+library(Biobase)
+library(limma)
+library(edgeR)
+library(ggplot2)
+library(ggrepel)
+library(RColorBrewer)
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(EnhancedVolcano)
+```
+
+# Load and Prepare Data
+```{r Data}
+setwd("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Kidneys/RNAseq/HarshpreetsAnalysis/2206 Combined")
+data <-load("Bulk_rnaseq_Nbl1xCol4a5_Nbl1KO_sample_pheno_probeanns.rdata")
+ls()
+
+# saving .rdata file as a .txt
+#counts <- exprs(cnts.eset)
+#tpm <- exprs(tpm.eset)
+#fpkm <- exprs(fpkm.eset)
+
+#all(rownames(counts) == rownames(tpm)) # True
+#all(rownames(counts) == rownames(fpkm)) # True
+
+#combined <- data.frame(Gene = rownames(counts),
+#                       counts, tpm, fpkm)
+
+#colnames(combined)[2:(ncol(counts)+1)] <- paste0("Counts_", colnames(counts))
+#colnames(combined)[(ncol(counts)+2):(ncol(counts)+ncol(tpm)+1)] <- paste0("TPM_", #colnames(tpm))
+#colnames(combined)[(ncol(counts)+ncol(tpm)+2):ncol(combined)] <- paste0("FPKM_", #colnames(fpkm))
+
+
+#print(colnames(combined))
+#write.table(combined, file = "2206_counts.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+
+probe.anns <- featureData(cnts.eset)@data 
+pheno.anns <- phenoData(cnts.eset)@data
+pheno.anns$cohort <- factor(pheno.anns$cohort)
+pheno.anns$genotype <- factor(pheno.anns$genotype, levels = c("WT", "HET"))
+
+probe.anns.sel <- probe.anns[probe.anns$biotype %in% c(" protein_coding", " lincRNA"),]
+cnts <- exprs(cnts.eset)
+cnts.sel <- cnts[rownames(probe.anns.sel),] 
+
+dge <- DGEList(cnts.sel)
+dge$samples$lib.size <- colSums(dge$counts)
+dge$genes <- probe.anns.sel[rownames(dge),]
+
+keep <- filterByExpr(dge, group = pheno.anns$genotype)
+dge <- dge[keep,, keep.lib.sizes = FALSE]
+dge <- calcNormFactors(dge)
+lcpm <- cpm(dge, log = TRUE)  # For visualization only
+```
+
+# PCA Before Batch Correction
+``` {r PCA}
+pca_pre <- prcomp(t(lcpm), scale. = TRUE)
+pca_df_pre <- data.frame(PC1 = pca_pre$x[,1], PC2 = pca_pre$x[,2], pheno.anns)
+
+pdf("2206Combined_PCA_BeforeBatch.pdf", width = 10, height = 8)
+
+ggplot(pca_df_pre, aes(x = PC1, y = PC2, color = genotype, shape = cohort)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA Before Batch Correction")
+
+dev.off()
+```
+
+# DEG Analysis using limma-voom with Batch Modeled in Design
+``` {r DEG}
+design <- model.matrix(~ genotype + cohort, data = pheno.anns)
+v <- voom(dge, design, plot = FALSE)
+fit <- lmFit(v, design)
+contrast <- makeContrasts(HETvsWT = genotypeHET, levels = design)
+fit2 <- contrasts.fit(fit, contrast)
+fit2 <- eBayes(fit2)
+```
+
+# PCA After Modeling Batch in Design
+``` {r PCA}
+exprs_corrected <- removeBatchEffect(v$E, batch = pheno.anns$cohort)
+v_corrected <- v
+v_corrected$E <- exprs_corrected
+
+pca_post <- prcomp(t(v_corrected$E), scale. = TRUE)
+pca_df_post <- data.frame(PC1 = pca_post$x[,1], PC2 = pca_post$x[,2], pheno.anns)
+
+pdf("2206Combined_PCA_AfterBatch.pdf", width = 10, height = 8)
+
+ggplot(pca_df_post, aes(x = PC1, y = PC2, color = genotype, shape = cohort)) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(title = "PCA After Batch Modeled in Design")
+
+dev.off()
+```
+
+# Extract DEG Results
+``` {r DEG}
+deg_results <- topTable(fit2, coef = "HETvsWT", number = Inf, adjust.method = "fdr")
+deg_sig <- deg_results[deg_results$P.Value < 0.05, ]
+```
+
+# Volcano Plot
+``` {r plot}
+deg_results$threshold <- "Not Sig"
+deg_results$threshold[deg_results$logFC > 0.5 & deg_results$P.Value < 0.1] <- "Up"
+deg_results$threshold[deg_results$logFC < -0.5 & deg_results$P.Value < 0.1] <- "Down"
+
+# Label only Htr6 and Nbl1
+deg_results$label <- ifelse(deg_results$symbol %in% c("Htr6", "Nbl1", "Ankra2"), deg_results$symbol, "")
+
+# Volcano Plot
+pdf("2206Combined_VolcanoPlot_Test_Genes.pdf", width = 10, height = 8)
+
+ggplot(deg_results, aes(x = logFC, y = -log10(P.Value), color = threshold)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("Down" = "red","Not Sig" = "grey", "Up" = "blue")) +
+  geom_text_repel(aes(label = label), max.overlaps = 1000) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  coord_cartesian(xlim = c(-3,9), ylim = c(0, 10)) +
+  theme_minimal() +
+  labs(title = "Volcano Plot: HET vs WT", x = "log2 Fold Change", y = "-log10 P-Value")
+
+dev.off()
+```
+
+# Looking at Genes of Interest
+``` {r gene}
+Htr6 <- "Htr6"
+logFC_Htr6 <- deg_results$logFC[deg_results$symbol == Htr6]
+Htr6_foldchange<-2^logFC_Htr6
+pval_Htr6 <- deg_results$P.Value[deg_results$symbol == Htr6]
+#Htr6_foldchange: 13.7141594876157
+#logFC_Htr6: 3.7759429999686
+#p=8.52475679356065e-05
+
+Nbl1 <- "Nbl1"
+logFC_Nbl1 <- deg_results$logFC[deg_results$symbol == Nbl1]
+Nbl1_foldchange<-2^logFC_Nbl1
+pval_Nbl1 <- deg_results$P.Value[deg_results$symbol == Nbl1]
+#Nbl1_foldchange: 0.602923260723498
+#logFC_Nbl1: -0.729953705397079
+#p=8.42666560711253e-05
+```
+
+# Looking at Pathways
+``` {r Pathway}
+pdf("TopEnrichedPathways.pdf", width = 10, height = 8)
+
+try({
+  gene_bitr <- bitr(deg_sig$geneid, fromType = "ENSEMBL", toType = c("ENTREZID", "SYMBOL"), OrgDb = "org.Mm.eg.db")
+  keggpath <- enrichKEGG(gene_bitr$ENTREZID, organism = "mmu", pvalueCutoff = 0.05)
+  keggpath <- setReadable(keggpath, "org.Mm.eg.db", keyType = "ENTREZID")
+  barplot(keggpath, title = "Top Enriched pathways in WT vs HET", font.size = 7)
+}, silent = TRUE)
+
+dev.off()
+
+pdf("TopEnrichedBiologicalProcesses.pdf", width = 10, height = 8)
+
+try({
+  GOterm.bp <- enrichGO(gene_bitr$ENTREZID, OrgDb = "org.Mm.eg.db", readable = TRUE, ont = "BP")
+  dotplot(GOterm.bp, showCategory = 25, font.size = 6, label_format = 50,
+          title = "Enriched Biological Processes in WT vs HET")
+}, silent = TRUE)
+
+dev.off()
+```

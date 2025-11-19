@@ -1,0 +1,180 @@
+# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
+# Mouse Models of Kidney Disease, but is Not Causal.
+
+# Supplemental Figure 5. Quantifying MME and Podocytes in Male Nbl1 Knockout Mice 
+# Treated with Cisplatin
+
+# Analyzing MME Area and Podocyte # per Glomerular Area in Nbl1 HET & WT 
+# mice treated with Cisplatin or PBS, using ImageJ and a Linear Mixed Model.
+
+###############################################################################
+# Install Packages
+install.packages("readxl")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lme4")
+install.packages("performance")
+install.packages("emmeans")
+
+# Load Packages
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(performance)
+library(emmeans)
+
+###############################################################################
+## MME Area
+
+# Load Data
+PASImageJResults <- read.csv("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Cisplatin/PASImageJResults.csv")
+
+## Fit the model with interaction
+model <- lmer(mmeArea ~ Genotype * Treatment + (1|ID), data = PASImageJResults, REML = FALSE)
+
+# Get estimated marginal means
+emm <- emmeans(model, ~ Genotype | Treatment)
+
+# Pairwise comparisons between genotypes within each treatment
+contrast_results <- contrast(emm, method = "pairwise")
+print(contrast_results)
+# Cisplatin Treatment P-value = 0.1439
+# PBS Treatment P-value = 0.3695
+
+# Split data by treatments
+treatments <- unique(PASImageJResults$Treatment)
+
+# Get R² values
+r2_by_treatment <- lapply(treatments, function(t) {
+  subset_data <- PASImageJResults[PASImageJResults$Treatment == t, ]
+  model <- lmer(mmeArea ~ Genotype + (1|ID), data = subset_data, REML = FALSE)
+  r2(model)
+})
+
+names(r2_by_treatment) <- treatments
+r2_by_treatment
+## Cisplatin Treatment:
+# Conditional R2: 0.208
+# Marginal R2: 0.104
+## PBS Treatment:
+# Conditional R2: 0.286
+# Marginal R2:0.041
+
+# Create Summary Stats
+summary_stats <- PASImageJResults %>%group_by(Treatment, Genotype) %>%summarise(mean = mean(mmeArea, na.rm = TRUE),sem = sd(mmeArea, na.rm = TRUE) / sqrt(n()),.groups = 'drop')
+
+# Update summary stats to match
+summary_stats$Group <- interaction(summary_stats$Treatment, summary_stats$Genotype)
+
+# Plot
+ggplot(PASImageJResults, aes(x = Treatment, y = mmeArea, color = Genotype, shape = factor(ID))) +
+  geom_jitter(
+    position = position_jitterdodge(jitter.width = 0.4, dodge.width = 0.3),
+    size = 2,
+    alpha = 0.8,
+    show.legend = TRUE
+  ) +
+  geom_point(
+    data = summary_stats,
+    aes(x = Treatment, y = mean, group = Genotype),
+    position = position_dodge(width = 0.3),
+    shape = 18,
+    size = 4,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_errorbar(
+    data = summary_stats,
+    aes(x = Treatment, y = mean, ymin = mean - sem, ymax = mean + sem, group = Genotype),
+    position = position_dodge(width = 0.3),
+    width = 0.2,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  scale_color_manual(values = c("Het" = "orange", "WT" = "purple")) +
+  scale_shape_manual(values = 0:25) +
+  coord_cartesian(ylim = c(0, 100)) +
+  theme_minimal() +
+  labs(
+    x = "Treatment",
+    y = "MME Area"
+  )
+
+###############################################################################
+## Podocyte # per Glomerular Area
+
+# Load Data
+IFData <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Cisplatin/IFAnalysisRB10112022.xlsx")
+
+# Fit the model with interaction
+model <- lmer(WT1perGlomArea ~ Genotype * Treatment + (1|ID), data = IFData, REML = FALSE)
+
+# Get estimated marginal means
+emm <- emmeans(model, ~ Genotype | Treatment)
+
+# Pairwise comparisons between genotypes within each treatment
+contrast_results <- contrast(emm, method = "pairwise")
+
+# View the results
+summary(contrast_results)
+# Cisplatin Treatment P-value = 0.6144
+# PBS Treatment P-value = 0.2764
+
+# Split data by Treatment
+treatments <- unique(IFData$Treatment)
+
+# Get R² values
+r2_by_treatment <- lapply(treatments, function(t) {
+  subset_data <- IFData[IFData$Treatment == t, ]
+  model <- lmer(WT1perGlomArea ~ Genotype + (1|ID), data = subset_data, REML = FALSE)
+  r2(model)
+})
+
+names(r2_by_treatment) <- treatments
+r2_by_treatment
+## Cisplatin Treatment
+# Conditional R2: 0.294
+# Marginal R2: 0.013
+## PBS Treatment
+# Conditional R2: 0.167
+# Marginal R2: 0.090
+
+# Create Summary Stats
+summary_stats <- IFData %>% group_by(Treatment, Genotype) %>% summarise(mean = mean(WT1perGlomArea, na.rm = TRUE), sem = sd(WT1perGlomArea, na.rm = TRUE) / sqrt(n()),.groups = 'drop')
+
+# Update summary stats to match
+summary_stats$Group <- interaction(summary_stats$Treatment, summary_stats$Genotype)
+
+# Plot
+ggplot(IFData, aes(x = Treatment, y = WT1perGlomArea, color = Genotype, shape = factor(ID))) +
+  geom_jitter(
+    position = position_jitterdodge(jitter.width = 0.4, dodge.width = 0.3),
+    size = 2,
+    alpha = 0.8,
+    show.legend = TRUE
+  ) +
+  geom_point(
+    data = summary_stats,
+    aes(x = Treatment, y = mean, group = Genotype),
+    position = position_dodge(width = 0.3),
+    shape = 18,
+    size = 4,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  geom_errorbar(
+    data = summary_stats,
+    aes(x = Treatment, y = mean, ymin = mean - sem, ymax = mean + sem, group = Genotype),
+    position = position_dodge(width = 0.3),
+    width = 0.2,
+    color = "black",
+    inherit.aes = FALSE
+  ) +
+  scale_color_manual(values = c("Het" = "orange", "WT" = "purple")) +
+  scale_shape_manual(values = 0:25) +
+  theme_minimal() +
+  labs(
+    x = "Treatment",
+    y = "Podocyte # per Glomerular Area",
+  )

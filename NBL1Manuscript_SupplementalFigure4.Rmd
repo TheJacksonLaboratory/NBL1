@@ -1,0 +1,125 @@
+---
+title: "NBL1Manuscript_SupplementalFigure4"
+author: "Courtney Willey"
+date: "2025-10-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in Mouse Models of Kidney Disease, but is Not Causal.
+
+# Supplemental Figure 4. Quantifying Fibrosis in Male Nbl1 Knockout Mice with XLAS
+
+Analyzing Percent Fibrosis and Fibrosis Area (mm2) in Nbl1 HET & WT mice with XLAS, using QuPath and a Linear Mixed Model.
+
+```{r Install}
+# Install Packages
+install.packages("readxl")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lme4")
+install.packages("performance")
+```
+
+```{r Load}
+# Load Packages
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(performance)
+```
+
+```{r Data}
+# Load Data
+Fibrosis <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Kidneys/Masson's Trichrome & Fibrosis/FibrosisQuantifiedUnblinded_2206.xlsx")
+```
+
+# Percent Fibrosis
+
+```{r Percent}
+# Run the model assuming that genotype dpes not play a role
+FAR2.null=lmer(FibrosisPercentage ~ (1|Animal), data=Fibrosis, REML=FALSE)
+
+# Run the model adding the genotype 
+FAR2.model=lmer(FibrosisPercentage ~ Genotype + (1|Animal), data=Fibrosis, REML = FALSE)
+
+# Compare the models to see if they are significantly different
+anova(FAR2.null,FAR2.model)
+# P-value = 0.2046
+
+# Get R² values
+r2_values <- r2(FAR2.model)
+print(r2_values)
+# Conditional R2: 0.493
+# Marginal R2: 0.073
+
+# Calculate summary statistics (Fibrosis Percentage)
+summary_stats <- Fibrosis %>%
+  group_by(Genotype) %>%
+  summarise(
+    mean = mean(FibrosisPercentage, na.rm = TRUE),
+    sem = sd(FibrosisPercentage, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot (Fibrosis Percentage)
+ggplot(Fibrosis, aes(x = Genotype, y = FibrosisPercentage, color = Genotype)) +
+  geom_jitter(aes (color = Genotype, shape = factor(Sample)), width = 0.2,size = 2,show.legend = TRUE) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  coord_cartesian(ylim = c(0, 70)) +
+  scale_shape_manual(values = 0:25) +
+  theme_minimal() +
+  labs (
+    x = "Genotype",
+    y = "% Fibrosis"
+  )
+```
+
+# Fibrosis Area (mm2)
+
+```{r Area}
+# Run the model assuming that genotype dpes not play a role
+FAR2.null=lmer(FibrosisArea_mm2 ~ (1|Animal), data=Fibrosis, REML=FALSE)
+
+# Run the model adding the genotype 
+FAR2.model=lmer(FibrosisArea_mm2 ~ Genotype + (1|Animal), data=Fibrosis, REML = FALSE)
+
+# Compare the models to see if they are significantly different
+anova(FAR2.null,FAR2.model)
+# P-value = 0.2247
+
+# Get R² values
+r2_values <- r2(FAR2.model)
+print(r2_values)
+# Conditional R2: 0.439
+# Marginal R2: 0.064
+
+# Calculate summary statistics (Fibrosis Area)
+summary_stats <- Fibrosis %>%
+  group_by(Genotype) %>%
+  summarise(
+    mean = mean(FibrosisArea_mm2, na.rm = TRUE),
+    sem = sd(FibrosisArea_mm2, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot (Fibrosis Area)
+ggplot(Fibrosis, aes(x = Genotype, y = FibrosisArea_mm2, color = Genotype)) +
+  geom_jitter(aes (color = Genotype, shape = factor(Sample)), width = 0.2,size = 2,show.legend = TRUE) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  coord_cartesian(ylim = c(0, 15)) +
+  scale_shape_manual(values = 0:25) +
+  theme_minimal() +
+  labs (
+    x = "Genotype",
+    y = expression("Fibrosis Area mm" ^ 2)
+  )
+```
