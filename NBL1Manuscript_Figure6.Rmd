@@ -1,0 +1,262 @@
+---
+title: "NBL1Manuscript_Figure6"
+author: "Courtney Willey"
+date: "11/10/2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in Mouse Models of Kidney Disease, but is Not Causal.
+
+# Figure 6. Quantitative Trait Loci Analysis of NBL1 Concentration in DO-XLAS Mice.
+QTL mapping of serum NBL1 concentration at 15-weeks in DO-XLAS Cohorts 1 and 2. Allele effect plot for Chr. 4 Locus in females. Correlation between kidney Nbl1 expression and serum NBL1 concentration (RankZ Transformed) in females and males from DO-XLAS Cohorts 1 and 2.
+
+# Description
+This is an R Markdown document for the 2022-01 project using Diversity Outbred 
+(DO) mice with X-Linked Alport Syndrome (XLAS). This document specifically 
+obtains QTLs for NBL1 analysis. 
+
+```{r Install, include=FALSE}
+#Install Packages.
+install.packages("qtl2") 
+install.packages("devtools") 
+install.packages("knitr") 
+install.packages("qtl2convert") 
+install.packages("ggplot2") 
+install.packages("dplyr") 
+install.packages("tibble") 
+install.packages("data.table")
+install.packages("tidyverse")
+install.packages("multcomp")
+install.packages("readxl")
+```
+
+```{r Load, include=FALSE}
+#Load Packages.
+library("qtl2") 
+library("devtools") 
+library("knitr") 
+library("qtl2convert") 
+library("ggplot2") 
+library("dplyr") 
+library("tibble") 
+library("data.table")
+library("tidyverse")
+library("multcomp")
+library("readxl")
+```
+
+# Starting with QTL Analysis in Cohorts 1 and 2.
+
+# Load Files
+First, let's load in the files we will be using.
+```{r Files}
+# Load in the GRCm39 mouse reference genome.
+markers<-read.delim("/projects/korstanje-lab/RNAseq/DOXLASCohort2/NOVOmar2024/ref.genome_grid.GRCm39.tsv")  
+
+# Load in the probability file from 22-01, that has been obtained using GRCm39.
+probs<-readRDS("/projects/korstanje-lab/RNAseq/DOXLASCohort2/NOVOmar2024/Results/MergedProbs2.rds") 
+#Fp = apply(probs, 1:2, mean)
+#image(Fp) 
+
+# Load in the phenotype and covariate data file for each sex.
+phenoF <-read_csv("/projects/korstanje-lab/RNAseq/DOXLASCohort2/NOVOmar2024/Phenotype/2201CombinedCohortFemales.csv")
+phenoM <-read_csv("/projects/korstanje-lab/RNAseq/DOXLASCohort2/NOVOmar2024/Phenotype/2201CombinedCohortMales.csv")
+```
+
+# Load in Phenotypes
+Because all of our phenotypes and covariates are within the same .csv file, we 
+need to make individual data matrices for each phenotype.
+
+```{r Phenotypes}
+# Load in just Female NBL1.
+FemaleNBL1 = phenoF[c("nbl1_15w_rankz")]
+FemaleNBL1 = data.matrix(FemaleNBL1)
+is.numeric(FemaleNBL1)
+
+# Load in just Male NBL1.
+MaleNBL1 = phenoM[c("nbl1_15w_rankz")]
+MaleNBL1 = data.matrix(MaleNBL1)
+is.numeric(MaleNBL1)
+```
+
+# Load in Covariates
+We also need to make individual data matrices for each covariate.
+
+```{r Covariates}
+# Female NBL1 Covariates.
+NBL1_covarF = phenoF[c("cohort", "sire_generation")] 
+NBL1_covarF = data.matrix(NBL1_covarF)
+is.numeric(NBL1_covarF)
+
+# Male NBL1 Covariates.
+NBL1_covarM = phenoM[c("cohort", "sire_generation")] 
+NBL1_covarM = data.matrix(NBL1_covarM)
+is.numeric(NBL1_covarM)
+```
+
+# Extract Samples
+Now we need to now extract the samples that exist between our phenotype and 
+probabilities files.
+
+```{r Samples}
+# Pull sample IDs from each file.
+phenoIDsF <- rownames(phenoF)
+phenoIDsM <- rownames(phenoM)
+probsIDs <- rownames(probs)
+
+# Determine which sample IDs exist in both files for Females.
+samplesF = intersect(phenoIDsF, probsIDs)
+probsF = probs[samplesF,,]
+
+# Determine which sample IDs exist in both files for Males.
+samplesM = intersect(phenoIDsM, probsIDs)
+probsM = probs[samplesM,,]
+```
+
+# QTL Prep
+However, before we can run our QTL code, we need to obtain the calculated 
+probabilities (LOD scores), kinship information, and create a map.
+
+```{r QTL}
+# Convert DOQTL Code to qtl2 for Females. 
+qtl2probsF = probs_doqtl_to_qtl2(probsF, markers)
+aprF <- genoprob_to_alleleprob(qtl2probsF)
+
+# Convert DOQTL Code to qtl2 for Males. 
+qtl2probsM = probs_doqtl_to_qtl2(probsM, markers)
+aprM <- genoprob_to_alleleprob(qtl2probsM)
+
+# Run kinship matrix for Females.
+kF <- calc_kinship(aprF,"loco")
+#options(na.action = 'na.pass') #Leave in NA's.
+
+#Run kinship matrix for Males.
+kM <- calc_kinship(aprM,"loco")
+#options(na.action = 'na.pass') #Leave in NA's.
+
+# Make Map for Females and Males. 
+pmap = qtl2convert::map_df_to_list(markers, chr_column = "chr", pos_column = "pos", marker_column = "marker")
+```
+
+# Nbl1 QTL & Allele Effects
+We can run the scan1 function and plot the results for our Neuroblastoma 
+Supressor of Tumorgenicity 1 (Nbl1) phenotype, which is a potential modifier 
+gene for Chronic Kidney Disease (CKD) and possibly XLAS.
+
+```{r Nbl1}
+# Scan1 for Female Nbl1 QTL at 15w of age with DO generation, and cohort as an additive covariate.  
+nbl1_qtl_add_F = scan1(pheno = FemaleNBL1, genoprobs = aprF, kinship = kF, addcovar = NBL1_covarF)
+
+# Scan1 for Male Nbl1 QTL at 15w of age with DO generation, and cohort as an additive covariate. 
+nbl1_qtl_add_M = scan1(pheno = MaleNBL1, genoprobs = aprM, kinship = kM, addcovar = NBL1_covarM)
+
+# Plotting the results.
+plot(nbl1_qtl_add_F, pmap,1,main="Female NBL1 15 weeks")
+plot(nbl1_qtl_add_M, pmap,1,main="Male NBL1 15 weeks")
+
+# Checking heritability of NBL1 for Females
+k_heritF <- calc_kinship(aprF, "overall")
+hsqF <- est_herit(FemaleNBL1, k_heritF, addcovar = NBL1_covarF)
+hsqF
+# A heritability of 0.74 is considered high, suggesting genetic factors play a strong role in females.
+
+# Checking heritability of NBL1 for Males
+k_heritM <- calc_kinship(aprM, "overall")
+hsqM <- est_herit(MaleNBL1, k_heritM, addcovar = NBL1_covarM)
+hsqM
+# This heritability is barely moderate, suggesting both genetic and environmental factors contribute in males.
+
+
+# Create permutations for significance testing.
+FemalePerms_Nbl1_1000 <- scan1perm(pheno = FemaleNBL1,  genoprobs = aprF, kinship = kF, addcovar = NBL1_covarF, n_perm = 1000)
+#summary(FemalePerms_Nbl1_1000,alpha=c(0.2,0.05))
+#According to the permutations, the LOD Thresholds for Females are as follows: 
+#Sex    Nbl115WK_Female_Rankz 
+#0.2     6.85      
+#0.05    7.65         
+
+MalePerms_Nbl1_1000 <- scan1perm(pheno = MaleNBL1,  genoprobs = aprM, kinship = kM, addcovar = NBL1_covarM, n_perm = 1000)
+#According to the permutations, the LOD Thresholds for Males are as follows: 
+#Sex    Nbl115WK_Male_Rankz 
+#0.2     6.75      
+#0.05    7.58    
+pdf("NBL1_15wMale_QTL.pdf", width = 7, height = 5)
+
+
+# Plot with Perms.
+pdf("NBL1_15wFemale_QTL.pdf", width = 7, height = 5)
+perms <- plot(nbl1_qtl_add_F, pmap,1,main="Female NBL1 15 weeks (1000 permutations)",ylim=c(0,8.00))+abline(h=6.85,col="orange")+abline(h=7.65,col="red")
+dev.off()
+
+pdf("NBL1_15wMale_QTL.pdf", width = 7, height = 5)
+plot(nbl1_qtl_add_M, pmap,1,main="Male NBL1 15 weeks (1000 permutations)",ylim=c(0,8.00))+abline(h=6.75,col="orange")+abline(h=7.58,col="red")
+dev.off()
+
+# Find peaks.
+find_peaks(scan1_output = nbl1_qtl_add_F, map = pmap, threshold = 6.85, prob = 0.95, expand2markers = FALSE)
+find_peaks(scan1_output = nbl1_qtl_add_M, map = pmap, threshold = 6.75, prob = 0.95, expand2markers = FALSE)
+# No peaks pass threshold in males.
+
+# Allele Effects in Females
+Pheno4 = subset.data.frame(FemaleNBL1, select="nbl1_15w_rankz")
+chr4_blup <- scan1blup(genoprobs = qtl2probs[,"4"], pheno = Pheno4, addcovar = NBL1_covarF)
+plot_coefCC(chr4_blup, pmap, scan1_output = nbl1_qtl_add_F[ drop = FALSE],legend="bottomleft")
+# Define region of interest on chromosome 4 (e.g., #from 50 Mb to 100 Mb)
+start_pos <- 125e6 # in Mb
+end_pos <- 160e6 # in Mb
+# Subset the pmap for chromosome 4
+chr4_pmap <- pmap[["4"]]
+region_markers <- names(chr4_pmap)[chr4_pmap >= start_pos & chr4_pmap <= end_pos]
+# Subset the BLUP results to the region
+chr4_blup_zoom <- chr4_blup[region_markers, , drop = FALSE]
+# Subset the pmap to the same region
+chr4_pmap_zoom <- chr4_pmap[region_markers]
+
+# Plot the zoomed-in region on Chr.4 in Females
+pdf("NBL1_15wFemale_Chr4AlleleEffects.pdf", width = 7, height = 5)
+plot_coefCC(chr4_blup_zoom, list("4" = chr4_pmap_zoom),scan1_output = nbl1_qtl_add_F[region_markers, , drop = FALSE],legend = "bottomleft")
+dev.off()
+```
+
+# Looking at correlation between kidney Nbl1 expression and serum NBL1 concentration (RankZ Transformed) in females and males from DO-XLAS Cohorts 1 and 2.
+
+```{r Correlation}
+# Load File
+CombinedCohort <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/20-01 DO-XLAS/20-01 Assays/Combined Distributions/Normalized Gene Expression/Cohort1&2_NormalizedGeneExpression_NBL1.xlsx")
+
+# Subset 15w Females & Males
+cohort12F <- CombinedCohort[CombinedCohort$sex == 0, ]
+cohort12M <- CombinedCohort[CombinedCohort$sex == 1, ]
+
+cohort12F$Nbl1_15w_Rankz_CombinedCohort <- as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort)
+cohort12F$Nbl1_ENSMUSG00000041120 <- as.numeric(cohort12F$Nbl1_ENSMUSG00000041120)
+
+cohort12M$Nbl1_15w_Rankz_CombinedCohort <- as.numeric(cohort12M$Nbl1_15w_Rankz_CombinedCohort)
+cohort12M$Nbl1_ENSMUSG00000041120 <- as.numeric(cohort12M$Nbl1_ENSMUSG00000041120)
+
+# Looking at NBL1 for Females in Both Cohorts
+CorrelationF <- ggplot(cohort12F, mapping=aes(x=as.numeric(Nbl1_ENSMUSG00000041120),y=as.numeric(Nbl1_15w_Rankz_CombinedCohort), size=1))+geom_point() + xlim(min(cohort12F$Nbl1_ENSMUSG00000041120), max(1.)) + ylim(min(cohort12F$Nbl1_15w_Rankz_CombinedCohort), max(cohort12F$Nbl1_15w_Rankz_CombinedCohort)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", se = FALSE, size=0.5)+xlab("RankZ (Nbl1 Expression)")+ylab("RankZ (serum NBL1)")+ggtitle("Correlation Between NBL1 Levels and Nbl1 Expression in Females")
+CorrelationF
+
+# Determining if this is significant
+SignificanceF <- cor.test(as.numeric(cohort12F$Nbl1_ENSMUSG00000041120), as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort))
+view(SignificanceF)
+# p-value = 0.0006432811, SIGNIFICANT
+R2F <- SignificanceF$estimate^2
+R2F #0.06456162
+
+# Looking at NBL1 for Males
+CorrelationM <- ggplot(cohort12M, mapping=aes(x=as.numeric(Nbl1_ENSMUSG00000041120),y=as.numeric(Nbl1_15w_Rankz_CombinedCohort), size=1))+geom_point() + scale_x_continuous(limits = c(0.0, 1.5), breaks = c(0.0, 0.5, 1.0, 1.5)) + ylim(min(cohort12M$Nbl1_15w_Rankz_CombinedCohort), max(cohort12M$Nbl1_15w_Rankz_CombinedCohort)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", se = FALSE, size=0.5)+xlab("RankZ (Nbl1 Expression)")+ylab("RankZ (serum NBL1)")+ggtitle("Correlation Between NBL1 Levels and Nbl1 Expression in Males")
+CorrelationM
+
+# Determining if this is significant
+SignificanceM <- cor.test(as.numeric(cohort12M$Nbl1_ENSMUSG00000041120), as.numeric(cohort12M$Nbl1_15w_Rankz_CombinedCohort))
+view(SignificanceM)
+# p-value = 0.3102138, SIGNIFICANT
+R2M <- SignificanceM$estimate^2
+R2M #0.005535888
+```

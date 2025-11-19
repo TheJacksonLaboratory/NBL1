@@ -1,0 +1,186 @@
+# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
+# Mouse Models of Kidney Disease, but is Not Causal.
+
+# Figure 2. Testing Causality using an Nbl1 Knockout Mouse with XLAS.
+
+# Serum NBL1 levels were calcualted via ELISA at 6, 10, and 15 weeks of age.
+# GFR was measured at 14-weeks and ACR was measured at 15-weeks. 
+
+###############################################################################
+# Install Packages
+install.packages("ggplot2")
+install.packages("readxl")
+install.packages("dplyr")
+install.packages("ggpubr")
+install.packages("multcomp")
+
+# Load Packages
+library(ggplot2)
+library(readxl)
+library(dplyr)
+library(ggpubr)
+library(multcomp)
+
+###############################################################################
+# NBL1 Levels
+
+# Load Data
+NBL1Levels2206Combined <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Assays/NBL1Levels2206Combined.xlsx")
+
+# Subset Data by Timepoint
+NBL1Levels2206Combined$Timepoint <- factor(NBL1Levels2206Combined$Timepoint, levels=c("6w", "10w", "15w"))
+
+# Calculate Summary Statistics
+summary_stats <- NBL1Levels2206Combined %>%
+  group_by(Timepoint, Genotype) %>%
+  summarise(
+    mean = mean(Nbl1, na.rm = TRUE),
+    sem = sd(Nbl1, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot Results
+ggplot(NBL1Levels2206Combined, aes(x = Genotype, y = Nbl1, color = Genotype)) +
+  facet_grid(. ~ Timepoint) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  ylim(0, 125000) +
+  ylab("NBL1 (pg/mL)") +
+  ggtitle("NBL1 levels for each genotype across timepoints")
+
+# Obtaining P-Values
+# 6w
+interaction6wData<-filter(NBL1Levels2206Combined, Timepoint=="6w")
+interaction6W<-aov(Nbl1~Genotype,interaction6wData)
+summary(interaction6W)
+# p-value = 0.00163
+
+#10w
+interaction10wData<-filter(NBL1Levels2206Combined, Timepoint=="10w")
+interaction10w<-aov(Nbl1~Genotype, interaction10wData)
+summary(interaction10w)
+# p-value = 0.0219
+
+#15w
+interaction15wData<-filter(NBL1Levels2206Combined, Timepoint=="15w")
+interaction15w<-aov(Nbl1~Genotype, interaction15wData)
+summary(interaction15w)
+# p-value = 9.4e-05
+
+# Function to calculate R² 
+get_r2 <- function(model) {
+  anova_table <- anova(model)
+  ss_total <- sum(anova_table$"Sum Sq")
+  ss_model <- sum(anova_table$"Sum Sq"[1])  # Only Genotype term
+  r_squared <- ss_model / ss_total
+  return(r_squared)
+}
+
+# Calculate R² for each timepoint
+r2_6w <- get_r2(interaction6W)
+r2_10w <- get_r2(interaction10w)
+r2_15w <- get_r2(interaction15w)
+
+# Print results
+cat("R² for 6w:", r2_6w, "\n") # r2 = 0.4677964
+cat("R² for 10w:", r2_10w, "\n") # r2 = 0.208233
+cat("R² for 15w:", r2_15w, "\n") # r2 = 0.5241731
+
+###############################################################################
+# Glomerular Filtration Rate (GFR) @ 14 weeks
+
+# Load Data
+GFR_2206 <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Assays/GFR_2206_Combined.xlsx")
+
+# Calculate Summary Statistics
+summary_stats <- GFR_2206 %>%
+  group_by(Genotype) %>%
+  summarise(
+    mean = mean(GFR, na.rm = TRUE),
+    sem = sd(GFR, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot Results
+ggplot(GFR_2206, aes(x = Genotype, y = GFR, color = Genotype)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  ylab("14w GFR (ml/min/100g b.w.)") +
+  xlab("Genotype") +
+  ggtitle("14w GFR Scores Per Genotype") +
+  ylim(0,1500)
+
+# Obtaining P-Value
+interaction <- aov(GFR~Genotype, data = GFR_2206)
+summary(interaction)
+# p-value = 0.676
+
+# Function to calculate R²
+get_r2 <- function(model) {
+  anova_table <- anova(model)
+  ss_total <- sum(anova_table$"Sum Sq")
+  ss_model <- sum(anova_table$"Sum Sq"[1])  # Only Genotype term
+  r_squared <- ss_model / ss_total
+  return(r_squared)
+}
+
+# Calculate R²
+r2 <- get_r2(interaction)
+
+# Print results
+cat("R²:", r2, "\n") # r2 = 0.009383944
+
+###############################################################################
+# Albumin to Creatinine Ratio (ACR) @ 15 weeks
+
+# Load Data
+ACR_2206_SamePlate_Corrected<-read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Assays/2206_ACR_SamePlate_Corrected.xlsx")
+
+# Filter Data By Timepoint
+ACR_filt <- ACR_2206_SamePlate_Corrected %>%
+  filter(Timepoint == "15w") %>%
+  mutate(ACR = as.numeric(ACR))
+
+# Calculate Summary Statistics
+summary_stats <- ACR_filt %>%
+  group_by(Genotype) %>%
+  summarise(
+    mean = mean(ACR, na.rm = TRUE),
+    sem = sd(ACR, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot Results
+ggplot(ACR_filt, aes(x = Genotype, y = ACR, color = Genotype)) +
+  geom_jitter(width = 0.2, size = 3, alpha = 0.7) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  ylab("15w ACR (mg/g)") +
+  xlab("Genotype") +
+  ggtitle("15w ACR Scores Per Genotype") +
+  ylim(0, 12000)
+
+# Obtaining P-Value
+interaction <- aov(ACR~Genotype, data = ACR_filt)
+summary(interaction)
+# p-value = 0.0545
+
+# Function to calculate R²
+get_r2 <- function(model) {
+  anova_table <- anova(model)
+  ss_total <- sum(anova_table$"Sum Sq")
+  ss_model <- sum(anova_table$"Sum Sq"[1])  # Only Genotype term
+  r_squared <- ss_model / ss_total
+  return(r_squared)
+}
+
+# Calculate R²
+r2 <- get_r2(interaction)
+
+# Print results
+cat("R²:", r2, "\n") # r2 = 0.1455244
