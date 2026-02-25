@@ -1,72 +1,135 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
+# Supplemental Figure 6. Correlation between BUN and NBL1 Concentrations in Male Nbl1 
+# Knockout Mice Treated with Cisplatin
 
-# Supplemental Figure 6. Correlations Between Renal Clcnka Expression and Serum 
-# NBL1 Concentrations, Renal Nbl1 Expression in 15-week DO-XLAS Females
-
-# Exploring correlations between renal clcnka expression and serum NBL1 
-# concentrations as well as renal clcnka expression and renal Nbl1 expression 
-# in 15-week DO-XLAS Females.
+# Analyzing correlation between BUN and NBL1 Levels in Nbl1 HET & WT 
+# mice treated with Cisplatin or PBS, using Spearman correlation.
 
 ###############################################################################
 # Install Packages
-install.packages("tidyverse")
-install.packages("dplyr")
-install.packages("ggplot2")
-install.packages("multcomp")
 install.packages("readxl")
+install.packages("ggplot2")
+install.packages("dplyr")
+install.packages("lme4")
+install.packages("performance")
+install.packages("emmeans")
+install.packages("ggrepel")
 
 # Load Packages
-library("tidyverse")
-library("dplyr")
-library("ggplot2")
-library("multcomp")
-library("readxl")
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(lme4)
+library(performance)
+library(emmeans)
+library(ggrepel)
 
 # Load Data
-CombinedCohort <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/20-01 DO-XLAS/20-01 Assays/Combined Distributions/Normalized Gene Expression/Cohort1&2_NormalizedGeneExpression_Crocc_Clcnka.xlsx")
-
-# Subset Data
-# Subset 15w Females
-cohort12F <- CombinedCohort[CombinedCohort$sex == 0, ]
-
-cohort12F$Nbl1_15w_Rankz_CombinedCohort <- as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort)
-cohort12F$Nbl1_ENSMUSG00000041120 <- as.numeric(cohort12F$Nbl1_ENSMUSG00000041120)
-cohort12F$Clcnka_ENSMUSG00000033770 <- as.numeric(cohort12F$Clcnka_ENSMUSG00000033770)
-
+Data <- read.csv("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Submission/AJP/RevisionsRound1/NBL1xBUN/2105NBL1BUNLevels.csv")
 ###############################################################################
-## Renal Clcnka Expression & Serum NBL1 Concentrations
+# Spearman Correlation Plot Together
 
-# Correlations between Clcnka Expression and RankZ Transformed 15w Nbl1 Levels
-# for Both Cohorts
-Correlation <- ggplot(cohort12F, mapping=aes(x=as.numeric(Clcnka_ENSMUSG00000033770),y=as.numeric(Nbl1_15w_Rankz_CombinedCohort), size=1))+geom_point() + xlim(min(cohort12F$Clcnka_ENSMUSG00000033770), max(cohort12F$Clcnka_ENSMUSG00000033770)) + ylim(min(cohort12F$Nbl1_15w_Rankz_CombinedCohort), max(cohort12F$Nbl1_15w_Rankz_CombinedCohort)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", size = 0.5, se = FALSE)+xlab("RankZ (Clcnka Expression)")+ylab("RankZ (serum NBL1)")+ggtitle("Correlation Between Clcnka Expression and 15w NBL1 Levels in DO-XLAS Females")
-Correlation
+# Make sure types and group order are right
+Data <- Data %>%
+  mutate(
+    GenTrea = factor(GenTrea, levels = c("WtPbs", "HetCis", "WtCis", "HetPbs")),
+    BUN = as.numeric(BUN),
+    Result = as.numeric(Dilution)
+  )
 
-# Determining if this is significant
-Significance <- cor.test(as.numeric(cohort12F$Clcnka_ENSMUSG00000033770), as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort))
-view(Significance)
-# P-value = 0.0124861, SIGNIFICANT
+# Overall Spearman correlation (across all groups)
+ct <- suppressWarnings(cor.test(Data$Dilution, Data$BUN, method = "spearman", use = "pairwise.complete.obs"))
+rho <- unname(ct$estimate)
+pval <- ct$p.value
+label_text <- sprintf("R = %.2f, p = %.3g", rho, pval)
 
-# Get R² values
-R2 <- Significance$estimate^2
-R2
-# R2 = 0.03512985
+# Compute a good label position inside the panel
+x_lab <- quantile(Data$Dilution, 0.05, na.rm = TRUE)
+y_lab <- quantile(Data$BUN,   0.95, na.rm = TRUE)
 
+# Plot: points + per-group linear trend with 95% CI
+p <- ggplot(Data, aes(x = Dilution, y = BUN, shape = GenTrea)) +
+  geom_point(alpha = 0.7, size = 2, stroke = 1) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.20) +  # linear fit per group
+  annotate("text", x = x_lab, y = y_lab, label = label_text,
+           hjust = 0, vjust = 1, size = 4.2, color = "black", fontface = "italic") +
+  scale_shape_manual(values = c(16,17,15,5)) +
+  labs(
+    title = "Correlation BUN and NBL1",
+    x = "NBL1 levels",
+    y = "BUN",
+    shape = "GenTrea", fill = "GenTrea"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+p
+ggsave("BUNxNBL1.pdf", p, width = 7, height = 6, dpi = 300)
 ###############################################################################
-## Renal Clcnka Expression & Renal Nbl1 Expression
 
-# Correlations between Clcnka Expression and RankZ Transformed 15w Nbl1 Expression
-# for Both Cohorts
-Correlation <- ggplot(cohort12F, mapping=aes(x=as.numeric(Clcnka_ENSMUSG00000033770),y=as.numeric(Nbl1_ENSMUSG00000041120), size=1))+geom_point() + xlim(min(cohort12F$Clcnka_ENSMUSG00000033770), max(cohort12F$Clcnka_ENSMUSG00000033770)) + ylim(min(cohort12F$Nbl1_ENSMUSG00000041120), max(cohort12F$Nbl1_ENSMUSG00000041120)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", size = 0.5, se = FALSE)+xlab("RankZ (Nbl1 Expression")+ylab("RankZ (Clcnka Expression)")+ggtitle("Correlation Between Clcnka Expression and Nbl1 Expression in DO-XLAS Females")
-Correlation
+# Spearman Correlation Plot Looking at Groups 
 
-# Determining if this is significant
-Significance <- cor.test(as.numeric(cohort12F$Clcnka_ENSMUSG00000033770), as.numeric(cohort12F$Nbl1_ENSMUSG00000041120))
-view(Significance)
-# p-value = 0.001643992, SIGNIFICANT
+# Ensure types & desired group order
+Data <- Data %>%
+  mutate(
+    GenTrea = factor(GenTrea, levels = c("WtPbs", "HetCis", "WtCis", "HetPbs")),
+    BUN = as.numeric(BUN),
+    Result = as.numeric(Dilution)
+  )
 
-# Get R² values
-R2 <- Significance$estimate^2
-R2
-# R2 = 0.0370477
+# 1) Per‑group Spearman statistics
+# R = Rho
+corr_df <- Data %>%
+  group_by(GenTrea) %>%
+  summarize(
+    n   = sum(complete.cases(Dilution, BUN)),
+    R = suppressWarnings(cor(Dilution, BUN, method = "spearman", use = "pairwise.complete.obs")),
+    p   = suppressWarnings(cor.test(Dilution, BUN, method = "spearman")$p.value),
+    .groups = "drop"
+  ) %>%
+  mutate(label = sprintf("%s: R = %.2f, p = %.3g", GenTrea, R, p))
 
+# 2) Choose a label position per group (quantiles keep text inside panel)
+label_pos <- Data %>%
+  group_by(GenTrea) %>%
+  summarize(
+    x_lab = quantile(Dilution, 0.06, na.rm = TRUE),
+    y_lab = quantile(BUN,   0.94, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Merge stats and positions
+lab_df <- left_join(corr_df, label_pos, by = "GenTrea")
+
+# 3) Plot: remove the overall stat; add per‑group labels
+
+p <- ggplot(Data, aes(x = Result, y = BUN, shape = GenTrea)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.20) +
+  ggrepel::geom_label_repel(
+    data = lab_df,
+    aes(x = x_lab, y = y_lab, label = label, shape = GenTrea),
+    fill = scales::alpha("white", 0.90),  # legible background
+    label.size = 0,                        # no border line
+    size = 3.9, fontface = "italic",
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    point.padding = 0.2,
+    label.padding = unit(0.15, "lines"),
+    show.legend = FALSE
+  ) +
+  scale_shape_manual(values = c(16,17,15,5)) +
+  labs(title = "Correlation BUN and NBL1", x = "NBL1 levels", y = "BUN", shape = "GenTrea", fill = "GenTrea") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top", legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold"), panel.grid.minor = 
+          element_blank())
+
+p
+# ggsave("BUN_NBL1_per_group_stats.png", p, width = 7, height = 6, dpi = 300)
+###############################################################################

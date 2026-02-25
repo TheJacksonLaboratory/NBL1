@@ -1,6 +1,3 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 5. Detection of Htr6 and Nbl1 using Fluorescent in situ Hybridization.
 
 # Htr6 and Nbl1 RNA expresson in glomeruli from male Nbl1 HET mice with or 

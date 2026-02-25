@@ -1,6 +1,3 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 6. Quantitative Trait Loci Analysis of NBL1 Concentration in DO-XLAS 
 # Mice. QTL mapping of serum NBL1 concentration at 15-weeks in DO-XLAS Cohorts 
 # 1 and 2. Allele effect plot for Chr. 4 Locus in females. 

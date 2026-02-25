@@ -9,8 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 4. RNA Sequencing Analysis of Nbl1 Knockout Mice with Glomerular or Tubular Damage.
 XLAS Model
 

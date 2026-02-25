@@ -1,6 +1,3 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 2. Testing Causality using an Nbl1 Knockout Mouse with XLAS.
 
 # Serum NBL1 levels were calcualted via ELISA at 6, 10, and 15 weeks of age.

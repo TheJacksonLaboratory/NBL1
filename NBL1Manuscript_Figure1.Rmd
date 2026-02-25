@@ -9,8 +9,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 1. Correlation Between Serum NBL1 Concentrations and GFR, ACR in DO-XLAS Mice.
 
 Spearman's correlation coefficients were calculated to determine how serum NBL1 concentrations correlate with ACR and GFR in DO-XLAS Cohort 1, DO-XLAS Cohort 2, and DO-XLAS Cohort 2 Females at various time points.

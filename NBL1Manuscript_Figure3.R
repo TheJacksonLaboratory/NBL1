@@ -1,6 +1,3 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
-
 # Figure 3. Testing Causality using an Nbl1 Knockout Mouse with Cisplatin.
 
 # Blood Urea Nitrogen (BUN) was calcualted for Nbl1 HET & WT mice treated with

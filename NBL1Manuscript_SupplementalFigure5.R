@@ -1,6 +1,3 @@
-# Code Script for Nbl1 Manuscript: NBL1 Correlates with Renal Phenotypes in 
-# Mouse Models of Kidney Disease, but is Not Causal.
-
 # Supplemental Figure 5. Quantifying MME and Podocytes in Male Nbl1 Knockout Mice 
 # Treated with Cisplatin
 
