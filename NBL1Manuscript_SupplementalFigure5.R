@@ -1,177 +1,69 @@
-# Supplemental Figure 5. Quantifying MME and Podocytes in Male Nbl1 Knockout Mice 
-# Treated with Cisplatin
+# Supplemental Figure 5. Correlations Between Renal Clcnka Expression and Serum 
+# NBL1 Concentrations, Renal Nbl1 Expression in 15-week DO-XLAS Females
 
-# Analyzing MME Area and Podocyte # per Glomerular Area in Nbl1 HET & WT 
-# mice treated with Cisplatin or PBS, using ImageJ and a Linear Mixed Model.
+# Exploring correlations between renal clcnka expression and serum NBL1 
+# concentrations as well as renal clcnka expression and renal Nbl1 expression 
+# in 15-week DO-XLAS Females.
 
 ###############################################################################
 # Install Packages
-install.packages("readxl")
-install.packages("ggplot2")
+install.packages("tidyverse")
 install.packages("dplyr")
-install.packages("lme4")
-install.packages("performance")
-install.packages("emmeans")
+install.packages("ggplot2")
+install.packages("multcomp")
+install.packages("readxl")
 
 # Load Packages
-library(readxl)
-library(ggplot2)
-library(dplyr)
-library(lme4)
-library(performance)
-library(emmeans)
-
-###############################################################################
-## MME Area
+library("tidyverse")
+library("dplyr")
+library("ggplot2")
+library("multcomp")
+library("readxl")
 
 # Load Data
-PASImageJResults <- read.csv("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Cisplatin/PASImageJResults.csv")
+CombinedCohort <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/20-01 DO-XLAS/20-01 Assays/Combined Distributions/Normalized Gene Expression/Cohort1&2_NormalizedGeneExpression_Crocc_Clcnka.xlsx")
 
-## Fit the model with interaction
-model <- lmer(mmeArea ~ Genotype * Treatment + (1|ID), data = PASImageJResults, REML = FALSE)
+# Subset Data
+# Subset 15w Females
+cohort12F <- CombinedCohort[CombinedCohort$sex == 0, ]
 
-# Get estimated marginal means
-emm <- emmeans(model, ~ Genotype | Treatment)
-
-# Pairwise comparisons between genotypes within each treatment
-contrast_results <- contrast(emm, method = "pairwise")
-print(contrast_results)
-# Cisplatin Treatment P-value = 0.1439
-# PBS Treatment P-value = 0.3695
-
-# Split data by treatments
-treatments <- unique(PASImageJResults$Treatment)
-
-# Get R² values
-r2_by_treatment <- lapply(treatments, function(t) {
-  subset_data <- PASImageJResults[PASImageJResults$Treatment == t, ]
-  model <- lmer(mmeArea ~ Genotype + (1|ID), data = subset_data, REML = FALSE)
-  r2(model)
-})
-
-names(r2_by_treatment) <- treatments
-r2_by_treatment
-## Cisplatin Treatment:
-# Conditional R2: 0.208
-# Marginal R2: 0.104
-## PBS Treatment:
-# Conditional R2: 0.286
-# Marginal R2:0.041
-
-# Create Summary Stats
-summary_stats <- PASImageJResults %>%group_by(Treatment, Genotype) %>%summarise(mean = mean(mmeArea, na.rm = TRUE),sem = sd(mmeArea, na.rm = TRUE) / sqrt(n()),.groups = 'drop')
-
-# Update summary stats to match
-summary_stats$Group <- interaction(summary_stats$Treatment, summary_stats$Genotype)
-
-# Plot
-ggplot(PASImageJResults, aes(x = Treatment, y = mmeArea, color = Genotype, shape = factor(ID))) +
-  geom_jitter(
-    position = position_jitterdodge(jitter.width = 0.4, dodge.width = 0.3),
-    size = 2,
-    alpha = 0.8,
-    show.legend = TRUE
-  ) +
-  geom_point(
-    data = summary_stats,
-    aes(x = Treatment, y = mean, group = Genotype),
-    position = position_dodge(width = 0.3),
-    shape = 18,
-    size = 4,
-    color = "black",
-    inherit.aes = FALSE
-  ) +
-  geom_errorbar(
-    data = summary_stats,
-    aes(x = Treatment, y = mean, ymin = mean - sem, ymax = mean + sem, group = Genotype),
-    position = position_dodge(width = 0.3),
-    width = 0.2,
-    color = "black",
-    inherit.aes = FALSE
-  ) +
-  scale_color_manual(values = c("Het" = "orange", "WT" = "purple")) +
-  scale_shape_manual(values = 0:25) +
-  coord_cartesian(ylim = c(0, 100)) +
-  theme_minimal() +
-  labs(
-    x = "Treatment",
-    y = "MME Area"
-  )
+cohort12F$Nbl1_15w_Rankz_CombinedCohort <- as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort)
+cohort12F$Nbl1_ENSMUSG00000041120 <- as.numeric(cohort12F$Nbl1_ENSMUSG00000041120)
+cohort12F$Clcnka_ENSMUSG00000033770 <- as.numeric(cohort12F$Clcnka_ENSMUSG00000033770)
 
 ###############################################################################
-## Podocyte # per Glomerular Area
+## Renal Clcnka Expression & Serum NBL1 Concentrations
 
-# Load Data
-IFData <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Cisplatin/IFAnalysisRB10112022.xlsx")
+# Correlations between Clcnka Expression and RankZ Transformed 15w Nbl1 Levels
+# for Both Cohorts
+Correlation <- ggplot(cohort12F, mapping=aes(x=as.numeric(Clcnka_ENSMUSG00000033770),y=as.numeric(Nbl1_15w_Rankz_CombinedCohort), size=1))+geom_point() + xlim(min(cohort12F$Clcnka_ENSMUSG00000033770), max(cohort12F$Clcnka_ENSMUSG00000033770)) + ylim(min(cohort12F$Nbl1_15w_Rankz_CombinedCohort), max(cohort12F$Nbl1_15w_Rankz_CombinedCohort)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", size = 0.5, se = FALSE)+xlab("RankZ (Clcnka Expression)")+ylab("RankZ (serum NBL1)")+ggtitle("Correlation Between Clcnka Expression and 15w NBL1 Levels in DO-XLAS Females")
+Correlation
 
-# Fit the model with interaction
-model <- lmer(WT1perGlomArea ~ Genotype * Treatment + (1|ID), data = IFData, REML = FALSE)
-
-# Get estimated marginal means
-emm <- emmeans(model, ~ Genotype | Treatment)
-
-# Pairwise comparisons between genotypes within each treatment
-contrast_results <- contrast(emm, method = "pairwise")
-
-# View the results
-summary(contrast_results)
-# Cisplatin Treatment P-value = 0.6144
-# PBS Treatment P-value = 0.2764
-
-# Split data by Treatment
-treatments <- unique(IFData$Treatment)
+# Determining if this is significant
+Significance <- cor.test(as.numeric(cohort12F$Clcnka_ENSMUSG00000033770), as.numeric(cohort12F$Nbl1_15w_Rankz_CombinedCohort))
+view(Significance)
+# P-value = 0.0124861, SIGNIFICANT
 
 # Get R² values
-r2_by_treatment <- lapply(treatments, function(t) {
-  subset_data <- IFData[IFData$Treatment == t, ]
-  model <- lmer(WT1perGlomArea ~ Genotype + (1|ID), data = subset_data, REML = FALSE)
-  r2(model)
-})
+R2 <- Significance$estimate^2
+R2
+# R2 = 0.03512985
 
-names(r2_by_treatment) <- treatments
-r2_by_treatment
-## Cisplatin Treatment
-# Conditional R2: 0.294
-# Marginal R2: 0.013
-## PBS Treatment
-# Conditional R2: 0.167
-# Marginal R2: 0.090
+###############################################################################
+## Renal Clcnka Expression & Renal Nbl1 Expression
 
-# Create Summary Stats
-summary_stats <- IFData %>% group_by(Treatment, Genotype) %>% summarise(mean = mean(WT1perGlomArea, na.rm = TRUE), sem = sd(WT1perGlomArea, na.rm = TRUE) / sqrt(n()),.groups = 'drop')
+# Correlations between Clcnka Expression and RankZ Transformed 15w Nbl1 Expression
+# for Both Cohorts
+Correlation <- ggplot(cohort12F, mapping=aes(x=as.numeric(Clcnka_ENSMUSG00000033770),y=as.numeric(Nbl1_ENSMUSG00000041120), size=1))+geom_point() + xlim(min(cohort12F$Clcnka_ENSMUSG00000033770), max(cohort12F$Clcnka_ENSMUSG00000033770)) + ylim(min(cohort12F$Nbl1_ENSMUSG00000041120), max(cohort12F$Nbl1_ENSMUSG00000041120)) +scale_color_manual(values=c("purple"))+geom_smooth(method="lm",color="blue", size = 0.5, se = FALSE)+xlab("RankZ (Nbl1 Expression")+ylab("RankZ (Clcnka Expression)")+ggtitle("Correlation Between Clcnka Expression and Nbl1 Expression in DO-XLAS Females")
+Correlation
 
-# Update summary stats to match
-summary_stats$Group <- interaction(summary_stats$Treatment, summary_stats$Genotype)
+# Determining if this is significant
+Significance <- cor.test(as.numeric(cohort12F$Clcnka_ENSMUSG00000033770), as.numeric(cohort12F$Nbl1_ENSMUSG00000041120))
+view(Significance)
+# p-value = 0.001643992, SIGNIFICANT
 
-# Plot
-ggplot(IFData, aes(x = Treatment, y = WT1perGlomArea, color = Genotype, shape = factor(ID))) +
-  geom_jitter(
-    position = position_jitterdodge(jitter.width = 0.4, dodge.width = 0.3),
-    size = 2,
-    alpha = 0.8,
-    show.legend = TRUE
-  ) +
-  geom_point(
-    data = summary_stats,
-    aes(x = Treatment, y = mean, group = Genotype),
-    position = position_dodge(width = 0.3),
-    shape = 18,
-    size = 4,
-    color = "black",
-    inherit.aes = FALSE
-  ) +
-  geom_errorbar(
-    data = summary_stats,
-    aes(x = Treatment, y = mean, ymin = mean - sem, ymax = mean + sem, group = Genotype),
-    position = position_dodge(width = 0.3),
-    width = 0.2,
-    color = "black",
-    inherit.aes = FALSE
-  ) +
-  scale_color_manual(values = c("Het" = "orange", "WT" = "purple")) +
-  scale_shape_manual(values = 0:25) +
-  theme_minimal() +
-  labs(
-    x = "Treatment",
-    y = "Podocyte # per Glomerular Area",
-  )
+# Get R² values
+R2 <- Significance$estimate^2
+R2
+# R2 = 0.0370477
+

@@ -1,73 +1,107 @@
-# Figure 3. Testing Causality using an Nbl1 Knockout Mouse with Cisplatin.
+# Figure 3. Quantifying Fibrosis in Male Nbl1 Knockout 
+# Mice with XLAS
 
-# Blood Urea Nitrogen (BUN) was calcualted for Nbl1 HET & WT mice treated with
-# Cisplaitn or PBS (Control).
+# Analyzing Percent Fibrosis and Fibrosis Area (mm2) in Nbl1 HET & WT 
+# mice with XLAS, using QuPath and a Linear Mixed Model.
 
 ###############################################################################
 # Install Packages
+install.packages("readxl")
 install.packages("ggplot2")
 install.packages("dplyr")
 install.packages("lme4")
-install.packages("emmeans")
-install.packages("readxl")
+install.packages("performance")
 
 # Load Packages
+library(readxl)
 library(ggplot2)
 library(dplyr)
 library(lme4)
-library(emmeans)
-library(readxl)
-
-###############################################################################
-# Blood Urea Nitrogen (BUN)
+library(performance)
 
 # Load Data
-BUN_2206 <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Cisplatin/BUN2105.xlsx")
+Fibrosis <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Kidneys/Masson's Trichrome & Fibrosis/FibrosisQuantifiedUnblinded_2206.xlsx")
 
-# Calculate Summary Statistics
-summary_stats <- BUN_2206 %>%
-  group_by(Treatment, Genotype) %>%
+###############################################################################
+## Percent Fibrosis 
+
+# Run the model assuming that genotype dpes not play a role
+FAR2.null=lmer(FibrosisPercentage ~ (1|Animal), data=Fibrosis, REML=FALSE)
+
+# Run the model adding the genotype 
+FAR2.model=lmer(FibrosisPercentage ~ Genotype + (1|Animal), data=Fibrosis, REML = FALSE)
+
+# Compare the models to see if they are significantly different
+anova(FAR2.null,FAR2.model)
+# P-value = 0.2046
+
+# Get R² values
+r2_values <- r2(FAR2.model)
+print(r2_values)
+# Conditional R2: 0.493
+# Marginal R2: 0.073
+
+# Calculate summary statistics (Fibrosis Percentage)
+summary_stats <- Fibrosis %>%
+  group_by(Genotype) %>%
   summarise(
-    mean = mean(BUN, na.rm = TRUE),
-    sem = sd(BUN, na.rm = TRUE) / sqrt(n()),
+    mean = mean(FibrosisPercentage, na.rm = TRUE),
+    sem = sd(FibrosisPercentage, na.rm = TRUE) / sqrt(n()),
     .groups = 'drop'
   )
 
-# Plot Results
-ggplot(BUN_2206, aes(x = Treatment, y = BUN, color = Genotype)) +
-  geom_jitter(position = position_dodge (width = 0.6), size = 3, alpha = 0.7) + # Dot plot
-  geom_point(data = summary_stats, aes(x = Treatment, y = mean, group = Genotype), position = position_dodge(width = 0.6), shape = 18, size = 4, color = "black") + # Mean
-  geom_errorbar(data = summary_stats, aes(x = Treatment, y = mean, ymin = mean - sem, ymax = mean + sem, group = Genotype), position = position_dodge(width = 0.6), width = 0.2, color = "black") + # SEM
+# Plot (Fibrosis Percentage)
+ggplot(Fibrosis, aes(x = Genotype, y = FibrosisPercentage, color = Genotype)) +
+  geom_jitter(aes (color = Genotype, shape = factor(Sample)), width = 0.2,size = 2,show.legend = TRUE) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
   scale_color_manual(values = c("orange", "purple")) +
-  coord_cartesian(ylim = c(0, 250)) +
-  ylab("BUN (mg/dL)") +
-  xlab("Genotype") +
-  ggtitle("BUN Concentrations per Treatment")
+  coord_cartesian(ylim = c(0, 70)) +
+  scale_shape_manual(values = 0:25) +
+  theme_minimal() +
+  labs (
+    x = "Genotype",
+    y = "% Fibrosis"
+  )
 
-# Obtaining P-Values
-# Subset for Treatment A
-model_A <- lm(BUN ~ Genotype, data = subset(BUN_2206, Treatment == "Cisplatin"), REML = FALSE)
+###############################################################################
+## Fibrosis Area (mm2)
 
-# Subset for Treatment B
-model_B <- lm(BUN ~ Genotype, data = subset(BUN_2206, Treatment == "PBS"), REML = FALSE)
+# Run the model assuming that genotype dpes not play a role
+FAR2.null=lmer(FibrosisArea_mm2 ~ (1|Animal), data=Fibrosis, REML=FALSE)
 
-# Summaries with p-values
-summary(model_A) # p-value = 0.495839, r2 = 0.03639
-summary(model_B) # p-value = 0.334, r2 = 0.06667
+# Run the model adding the genotype 
+FAR2.model=lmer(FibrosisArea_mm2 ~ Genotype + (1|Animal), data=Fibrosis, REML = FALSE)
 
-# Function to calculate R²
-get_r2 <- function(data) {
-  model <- lm(BUN ~ Genotype, data = data)
-  summary(model)$r.squared
-}
+# Compare the models to see if they are significantly different
+anova(FAR2.null,FAR2.model)
+# P-value = 0.2247
 
-# Split the data by Treatment
-treatment_groups <- split(BUN_2206, BUN_2206$Treatment)
-
-# Calculate R²
-r2_values <- sapply(treatment_groups, get_r2)
-
-# Print results
+# Get R² values
+r2_values <- r2(FAR2.model)
 print(r2_values)
-# Cisplatin: 0.03639354
-# PBS: 0.06666667
+# Conditional R2: 0.439
+# Marginal R2: 0.064
+
+# Calculate summary statistics (Fibrosis Area)
+summary_stats <- Fibrosis %>%
+  group_by(Genotype) %>%
+  summarise(
+    mean = mean(FibrosisArea_mm2, na.rm = TRUE),
+    sem = sd(FibrosisArea_mm2, na.rm = TRUE) / sqrt(n()),
+    .groups = 'drop'
+  )
+
+# Plot (Fibrosis Area)
+ggplot(Fibrosis, aes(x = Genotype, y = FibrosisArea_mm2, color = Genotype)) +
+  geom_jitter(aes (color = Genotype, shape = factor(Sample)), width = 0.2,size = 2,show.legend = TRUE) + # Dot plot
+  geom_point(data = summary_stats, aes(y = mean), shape = 18, size = 4, color = "black") + # Mean
+  geom_errorbar(data = summary_stats, aes(y = mean, ymin = mean - sem, ymax = mean + sem), width = 0.2, color = "black") + # SEM
+  scale_color_manual(values = c("orange", "purple")) +
+  coord_cartesian(ylim = c(0, 15)) +
+  scale_shape_manual(values = 0:25) +
+  theme_minimal() +
+  labs (
+    x = "Genotype",
+    y = expression("Fibrosis Area mm" ^ 2)
+  )

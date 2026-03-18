@@ -1,0 +1,288 @@
+# Figure 6. RNA Sequencing Analysis of Nbl1 Knockout Mice with Glomerular or 
+# Tubular Damage.
+
+# Cisplatin Model
+
+################################################################################
+# Install Packages
+install.packages("edgeR")
+install.packages("sva")
+install.packages("limma")
+install.packages("ggplot2")
+install.packages("Biobase")
+install.packages("RColorBrewer")
+install.packages("dplyr")
+install.packages("ggrepel")
+BiocManager::install("PCAtools")
+BiocManager::install("EnhancedVolcano")
+
+# Load Packages
+library(edgeR)
+library(sva)
+library(limma)
+library(ggplot2)
+library(Biobase)
+library(RColorBrewer)
+library(dplyr)
+library(ggrepel)
+library(PCAtools)
+library(EnhancedVolcano)
+
+################################################################################
+# Load and Prepare Data
+setwd("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Kidneys/RNAseq/HarshpreetsAnalysis/2105")
+load("Bulk_rnaseq_Nbl1KO_cisplatin_sample_pheno_probeanns.rdata")
+
+# saving .rdata file as a .txt
+#counts <- exprs(cnts.eset)
+#tpm <- exprs(tpm.eset)
+#fpkm <- exprs(fpkm.eset)
+
+#all(rownames(counts) == rownames(tpm)) # True
+#all(rownames(counts) == rownames(fpkm)) # True
+
+#combined <- data.frame(Gene = rownames(counts),
+#                       counts, tpm, fpkm)
+
+#colnames(combined)[2:(ncol(counts)+1)] <- paste0("Counts_", colnames(counts))
+#colnames(combined)[(ncol(counts)+2):(ncol(counts)+ncol(tpm)+1)] <- paste0("TPM_", colnames(tpm))
+#colnames(combined)[(ncol(counts)+ncol(tpm)+2):ncol(combined)] <- paste0("FPKM_", colnames(fpkm))
+
+#print(colnames(combined))
+#write.table(combined, file = "2105_counts.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+
+probe.anns <- featureData(cnts.eset)@data 
+pheno.anns <- phenoData(cnts.eset)@data
+pheno.anns$treatment <- factor(pheno.anns$treatment, levels = c("PBS", "Cisplatin"))
+pheno.anns$genotype <- factor(pheno.anns$genotype, levels = c("WT", "HET"))
+
+probe.anns.sel <- probe.anns[probe.anns$biotype %in% c(" protein_coding", " lincRNA"),]
+cnts <- exprs(cnts.eset)
+cnts.sel <- cnts[rownames(probe.anns.sel),]
+
+dge <- DGEList(cnts.sel)
+dge$samples$lib.size <- colSums(dge$counts)
+dge$genes <- probe.anns.sel[rownames(dge),]
+
+keep <- filterByExpr(dge, design = model.matrix(~ genotype * treatment, data = pheno.anns))
+dge <- dge[keep,,keep.lib.sizes=FALSE]
+dge <- calcNormFactors(dge)
+lcpm <- cpm(dge, log = TRUE) #15784,31
+
+################################################################################
+# Design Matrix and Model Fitting
+
+#The design matrix comprises of the following columns:
+  
+#`Intercept` 
+#`genotypeHET` 
+#`treatmentCisplatin` 
+#`genotypeHET.treatmentCisplatin`
+
+#`WT` and `PBS` are the reference
+
+#The contrast matrix corresponds to the following:
+#`HET_Cis_vs_PBS`: treatmentCisplatin = effect of Cisplatin in WT; genotypeHET:treatmentCisplatin = extra effect of Cisplatin in HET compared to WT; So this adds up to the total Cisplatin effect in HET.
+#`WT_Cis_vs_PBS`: Is the gene expression in WT Cisplatin different from WT PBS?; Simple — because treatmentCisplatin is the main effect in WT (reference genotype).  
+#`HET_vs_WT_PBS`: Is the gene expression in HET PBS different from WT PBS?; This is the main genotype effect in PBS-treated samples (PBS is the reference level for treatment).
+#`HET_vs_WT_PBS`: Is the gene expression in HET Cisplatin different from WT Cisplatin?; genotypeHET = baseline HET vs WT under PBS; genotypeHET:treatmentCisplatin = additional difference under Cisplatin; Adds up to total HET vs WT effect under Cisplatin.  
+
+#Interaction    = genotypeHET.treatmentCisplatin
+#`Interaction`: Does the effect of Cisplatin differ between HET and WT?; This is the statistical interaction term. If this is significant, it means: The treatment response is not consistent across genotypes.
+
+design <- model.matrix(~ genotype * treatment, data = pheno.anns)
+colnames(design) <- make.names(colnames(design))
+
+dge <- estimateDisp(dge, design)
+fit <- glmQLFit(dge, design)
+
+contrast.matrix <- makeContrasts(
+  # Effect of Cisplatin vs PBS in HET
+  HET_Cis_vs_PBS = treatmentCisplatin + genotypeHET.treatmentCisplatin,
+  # Effect of Cisplatin vs PBS in WT
+  WT_Cis_vs_PBS  = treatmentCisplatin,
+  # HET vs WT under PBS
+  HET_vs_WT_PBS  = genotypeHET,
+  # HET vs WT under Cisplatin
+  HET_vs_WT_Cis  = genotypeHET + genotypeHET.treatmentCisplatin,
+  # Interaction (does treatment effect differ by genotype)
+  Interaction    = genotypeHET.treatmentCisplatin,
+  levels = design
+)
+
+################################################################################
+# Differential Expression Results
+
+res_HET_Cis_vs_PBS <- glmQLFTest(fit, contrast = contrast.matrix[, "HET_Cis_vs_PBS"])
+res_WT_Cis_vs_PBS <- glmQLFTest(fit, contrast = contrast.matrix[, "WT_Cis_vs_PBS"])
+res_HET_vs_WT_PBS <- glmQLFTest(fit, contrast = contrast.matrix[, "HET_vs_WT_PBS"])
+res_HET_vs_WT_Cis <- glmQLFTest(fit, contrast = contrast.matrix[, "HET_vs_WT_Cis"])
+
+toptags_HET_Cis_vs_PBS <- topTags(res_HET_Cis_vs_PBS, n = Inf)$table %>% filter(FDR < 0.05) #10318 sig genes; Htr6 upregulated
+toptags_WT_Cis_vs_PBS <- topTags(res_WT_Cis_vs_PBS, n = Inf)$table %>% filter(FDR < 0.05) #10826 sig genes
+toptags_HET_vs_WT_PBS <- topTags(res_HET_vs_WT_PBS, n = Inf)$table %>% filter(FDR < 0.05) #0
+toptags_HET_vs_WT_Cis <- topTags(res_HET_vs_WT_Cis, n = Inf)$table %>% filter(FDR < 0.05) #1 gene Htr6
+toptags_HET_vs_WT_Cis_P <- topTags(res_HET_vs_WT_Cis, n = Inf)$table %>% filter(PValue < 0.05) #1056 sig
+
+################################################################################
+# Library Size Plot
+
+librarySizes <- colSums(dge$counts)
+libData <- data.frame(
+  Sample = names(librarySizes),
+  LibrarySize = librarySizes,
+  Unique_id = pheno.anns$Unique_id,
+  Genotype = pheno.anns$genotype
+)
+
+ggplot(libData, aes(x = Unique_id, y = LibrarySize, fill = Genotype)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  xlab("Sample Unique ID") +
+  ylab("Library Size") +
+  labs(fill = "Genotype") +
+  ggtitle("Library Sizes for Bulk RNAseq Kidney samples") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+################################################################################
+# PCA Plot
+
+pcp <- pca(lcpm, metadata = pheno.anns, removeVar = 0.1)
+
+pdf("2105_PCA.pdf", width = 10, height = 8)
+
+biplot(pcp,
+       showLoadings = FALSE,
+       legendPosition = 'right',
+       labSize = 3,
+       pointSize = 5,
+       sizeLoadingsNames = 3,
+       max.overlaps = Inf,
+       colby = 'genotype',
+       shape = 'treatment',
+       lab =NULL)
+
+dev.off()
+
+################################################################################
+# Htr6 Expression Boxplot
+
+# Extract Htr6 expression
+htr6_expr <- lcpm["ENSMUSG00000028747_Htr6", , drop = FALSE]
+
+# Build plotting dataframe
+plot_df <- cbind(
+  expression = as.numeric(htr6_expr),
+  pheno.anns[, c("genotype", "treatment")]
+)
+plot_df$group <- interaction(plot_df$genotype, plot_df$treatment, sep = "_")
+
+pdf("2105_Htr6ExpressionbyGroup.pdf", width = 10, height = 8)
+
+ggplot(plot_df, aes(x = group, y = expression, fill = group)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.2, size = 2) +
+  labs(
+    title = "Htr6 expression across groups",
+    x = "Group",
+    y = "log2 CPM"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+
+dev.off()
+
+################################################################################
+# Volcano Plot
+
+label_genes <- toptags_HET_Cis_vs_PBS$symbol[
+  toptags_HET_Cis_vs_PBS$logFC >= 3 | toptags_HET_Cis_vs_PBS$symbol == "Htr6"]
+
+#Ensure label list has no NAs or duplicates
+label_genes <- unique(na.omit(label_genes))
+
+pdf("2105_VolcanoPlot.pdf", width = 10, height = 8)
+
+EnhancedVolcano(
+  toptags_HET_Cis_vs_PBS,
+  lab = toptags_HET_Cis_vs_PBS$symbol,
+  selectLab = label_genes,
+  x = "logFC",
+  y = "FDR",
+  pCutoff = 0.05,
+  FCcutoff = 3.0,
+  pointSize = 3.0,
+  labSize = 5.0,
+  drawConnectors = TRUE,
+  widthConnectors = 0.75,
+  colAlpha = 0.6,  # slightly transparent points
+  legendLabels = c("Not Significant", "log2FC", "FDR", "FDR & log2FC"),
+  ylab = bquote(-Log[10]~FDR),
+  title = "Genes with log2FC ≥ 3 + Htr6"
+)
+
+dev.off()
+
+################################################################################
+# Looking at Cisplatin WT vs Cisplatin HET
+
+# Load full results
+toptags_HET_vs_WT_Cis_P <- topTags(res_HET_vs_WT_Cis, n = Inf)$table
+
+# Define thresholds
+toptags_HET_vs_WT_Cis_P$threshold <- "Not Sig"
+toptags_HET_vs_WT_Cis_P$threshold[toptags_HET_vs_WT_Cis_P$logFC > 0.5 & toptags_HET_vs_WT_Cis_P$PValue < 0.05] <- "Up"
+toptags_HET_vs_WT_Cis_P$threshold[toptags_HET_vs_WT_Cis_P$logFC < -0.5 & toptags_HET_vs_WT_Cis_P$PValue < 0.05] <- "Down"
+
+# Label top 10 "Not Sig" genes by lowest FDR
+not_sig_genes <- toptags_HET_vs_WT_Cis_P[toptags_HET_vs_WT_Cis_P$threshold == "Not Sig", ]
+top10_not_sig <- head(not_sig_genes[order(not_sig_genes$PValue), ], 10)
+
+# Label only Htr6 and Nbl1
+toptags_HET_vs_WT_Cis_P$label <- ifelse(
+  toptags_HET_vs_WT_Cis_P$symbol %in% c("Htr6", "Nbl1", "Cnih2", "Kng1"),
+  toptags_HET_vs_WT_Cis_P$symbol,
+  ""
+)
+
+# Ensure threshold is a factor with correct order
+toptags_HET_vs_WT_Cis_P$threshold <- factor(
+  toptags_HET_vs_WT_Cis_P$threshold,
+  levels = c("Down", "Not Sig", "Up")
+)
+
+# Plot
+pdf("2105_VolcanoPlot_HET_vs_WT_Cis_ggplot_Pvalue_Test.pdf", width = 10, height = 8)
+
+ggplot(toptags_HET_vs_WT_Cis_P, aes(x = logFC, y = -log10(PValue), color = threshold)) +
+  geom_point(alpha = 0.7) +
+  scale_color_manual(values = c("Down" = "red", "Not Sig" = "grey", "Up" = "blue")) +
+  geom_text_repel(aes(label = label), max.overlaps = 1000) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  coord_cartesian(xlim = c(-3,9), ylim = c(0, 10)) +
+  theme_minimal() +
+  labs(
+    title = "Volcano Plot: HET vs WT Treated with Cisplatin",
+    x = "log2 Fold Change",
+    y = "-log10 P-Value"
+  )
+
+dev.off()
+
+################################################################################
+# Looking at Genes of Interest
+
+Htr6 <- "Htr6"
+logFC_Htr6 <- toptags_HET_vs_WT_Cis_P$logFC[toptags_HET_vs_WT_Cis_P$symbol == Htr6]
+Htr6_foldchange<-2^logFC_Htr6
+pval_Htr6 <- toptags_HET_vs_WT_Cis_P$PValue[toptags_HET_vs_WT_Cis_P$symbol == Htr6]
+#Htr6_foldchange: 130.648445926209
+#logFC_Htr6: 7.02954615356097
+#p=2.11094739860647e-10
+
+Nbl1 <- "Nbl1"
+logFC_Nbl1 <- toptags_HET_vs_WT_Cis_P$logFC[toptags_HET_vs_WT_Cis_P$symbol == Nbl1]
+Nbl1_foldchange<-2^logFC_Nbl1
+pval_Nbl1 <- toptags_HET_vs_WT_Cis_P$PValue[toptags_HET_vs_WT_Cis_P$symbol == Nbl1]
+#Nbl1_foldchange: 0.354343958332172
+#logFC_Nbl1: -1.49677764401211
+#p=0.000263732312594367

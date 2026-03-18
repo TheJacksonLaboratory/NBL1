@@ -1,7 +1,7 @@
 ---
 title: "NBL1Manuscript_Figure5"
 author: "Courtney Willey"
-date: "2025-10-27"
+date: "2026-02-23"
 output: html_document
 ---
 
@@ -9,240 +9,140 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Figure 5. Detection of Htr6 and Nbl1 using Fluorescent in situ Hybridization.
+# Figure 5. Correlation between BUN and NBL1 Concentrations in Male Nbl1  Knockout Mice Treated with Cisplatin
 
-Htr6 and Nbl1 RNA expresson in glomeruli from male Nbl1 HET mice with or without XLAS, following cisplatin treatment, or PBS control.
+Analyzing correlation between BUN and NBL1 Levels in Nbl1 HET & WT mice treated with Cisplatin or PBS, using Spearman correlation.
 
 ```{r Install}
 # Install Packages
+install.packages("readxl")
 install.packages("ggplot2")
 install.packages("dplyr")
 install.packages("lme4")
+install.packages("performance")
 install.packages("emmeans")
-install.packages("readxl")
+install.packages("ggrepel")
 ```
 
 ```{r Load}
-# Load Packages
+library(readxl)
 library(ggplot2)
 library(dplyr)
 library(lme4)
+library(performance)
 library(emmeans)
-library(readxl)
+library(ggrepel)
 ```
-
-# Load Data
 
 ```{r Data}
 # Load Data
-data <- read_excel("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/22-06 Kidneys/RNAscope/RNAscopeAnalysis_R.xlsx")
-
-## Subset Data
-# Glomerular By Treatment
-data_G_NA <-subset(data, Area == "G" & Treatment == "NA")
-data_G_Cis <-subset(data, Area == "G" & Treatment == "Cisplatin")
-data_G_PBS <-subset(data, Area == "G" & Treatment == "Saline")
+Data <- read.csv("~/Library/CloudStorage/OneDrive-TheJacksonLaboratory/Korstanje Lab/22-06 NBL1 KO/NBL1 Manuscript/Submission/AJP/RevisionsRound1/NBL1xBUN/2105NBL1BUNLevels.csv")
 ```
 
-# Htr6 Expression
+# Spearman Correlation Plot Together
+```{r Together}
+# Make sure types and group order are right
+Data <- Data %>%
+  mutate(
+    GenTrea = factor(GenTrea, levels = c("WtPbs", "HetCis", "WtCis", "HetPbs")),
+    BUN = as.numeric(BUN),
+    Result = as.numeric(Dilution)
+  )
 
-```{r Htr6}
-## Looking at specifically Htr6 glomerular expression, broken up by treatment.
+# Overall Spearman correlation (across all groups)
+ct <- suppressWarnings(cor.test(Data$Dilution, Data$BUN, method = "spearman", use = "pairwise.complete.obs"))
+rho <- unname(ct$estimate)
+pval <- ct$p.value
+label_text <- sprintf("R = %.2f, p = %.3g", rho, pval)
 
-# Glomerular Htr6, NA
-glom_plot_htr6_NA <- ggplot(data_G_NA, aes(x = Genotype, y = Htr6_Green, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Htr6 Glomerular Expression by Genotype in Nbl1 KO Mice with XLAS",
-       x = "Genotype",
-       y= "Htr6 RNA Expression")
-print(glom_plot_htr6_NA)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Htr6 Glomerular Expression, NA
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Htr6_Green ~ (1|SampleName), data=data_G_NA, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Htr6_Green ~ Genotype + (1|SampleName), data=data_G_NA, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-# Data: data_G_NA
-# Models:
-# Percent.null: Htr6_Green ~ (1 | SampleName)
-# Percent.model: Htr6_Green ~ Genotype + (1 | SampleName)
-# npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(>Chisq)
-# Percent.null     3 400.53 406.81 -197.27    394.53                     
-# Percent.model    4 400.83 409.20 -196.41    392.83 1.7052  1     0.1916
-# Get R2 values
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: 0.562
-# Marginal R2: 0.152
-## Genotype does not affect Htr6 Glomerular Expression in this group (Chi-square(1)=1.7052, p=0.1916)
+# Compute a good label position inside the panel
+x_lab <- quantile(Data$Dilution, 0.05, na.rm = TRUE)
+y_lab <- quantile(Data$BUN,   0.95, na.rm = TRUE)
 
-# Glomerular Htr6, Cis
-glom_plot_htr6_Cis <- ggplot(data_G_Cis, aes(x = Genotype, y = Htr6_Green, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Htr6 Glomerular Expression by Genotype in Nbl1 KO Mice Treated with Cisplatin",
-       x = "Genotype",
-       y= "Htr6 RNA Expression")
-print(glom_plot_htr6_Cis)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Htr6 Glomerular Expression, Cis
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Htr6_Green ~ (1|SampleName), data=data_G_Cis, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Htr6_Green ~ Genotype + (1|SampleName), data=data_G_Cis, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-# Data: data_G_Cis
-# Models:
-# Percent.null: Htr6_Green ~ (1 | SampleName)
-# Percent.model: Htr6_Green ~ Genotype + (1 | SampleName)
-# npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(>Chisq)
-# Percent.null     3 540.68 547.43 -267.34    534.68                     
-# Percent.model    4 541.99 550.98 -266.99    533.99 0.6919  1     0.4055
-# Get R2 values
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: 0.272
-# Marginal R2: 0.033
-## Genotype does not affect Htr6 Glomerular Expression in this group (Chi-square(1)=0.6919, p=0.4055)
+# Plot: points + per-group linear trend with 95% CI
+p <- ggplot(Data, aes(x = Dilution, y = BUN, shape = GenTrea)) +
+  geom_point(alpha = 0.7, size = 2, stroke = 1) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.20) +  # linear fit per group
+  annotate("text", x = x_lab, y = y_lab, label = label_text,
+           hjust = 0, vjust = 1, size = 4.2, color = "black", fontface = "italic") +
+  scale_shape_manual(values = c(16,17,15,5)) +
+  labs(
+    title = "Correlation BUN and NBL1",
+    x = "NBL1 levels",
+    y = "BUN",
+    shape = "GenTrea", fill = "GenTrea"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
 
-# Glomerular Htr6, PBS
-glom_plot_htr6_PBS <- ggplot(data_G_PBS, aes(x = Genotype, y = Htr6_Green, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Htr6 Glomerular Expression by Genotype in Nbl1 KO Mice Treated with PBS",
-       x = "Genotype",
-       y= "Htr6 RNA Expression")
-print(glom_plot_htr6_PBS)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Htr6 Glomerular Expression, PBS
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Htr6_Green ~ (1|SampleName), data=data_G_PBS, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Htr6_Green ~ Genotype + (1|SampleName), data=data_G_PBS, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-#Data: data_G_PBS
-#Models:
-#  Percent.null: Htr6_Green ~ (1 | SampleName)
-#Percent.model: Htr6_Green ~ Genotype + (1 | SampleName)
-#npar    AIC    BIC  logLik -2*log(L) Chisq Df Pr(>Chisq)
-#Percent.null     3 450.85 457.13 -222.42    444.85                    
-#Percent.model    4 451.49 459.87 -221.75    443.49 1.353  1     0.2448
-#Get R2 values
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: 0.421
-# Marginal R2: 0.098
-## Genotype does not affect Htr6 Glomerular Expression in this group (Chi-square(1)=1.353, p=0.2448)
+p
+ggsave("BUNxNBL1.pdf", p, width = 7, height = 6, dpi = 300)
 ```
 
-# Nbl1 Expression
+# Spearman Correlation Plot Looking at Groups 
+```{r Groups}
+# Ensure types & desired group order
+Data <- Data %>%
+  mutate(
+    GenTrea = factor(GenTrea, levels = c("WtPbs", "HetCis", "WtCis", "HetPbs")),
+    BUN = as.numeric(BUN),
+    Result = as.numeric(Dilution)
+  )
 
-```{r Nbl1}
-## Looking at specifically Nbl1 glomerular expression, broken up by treatment.
+# 1) Per‑group Spearman statistics
+# R = Rho
+corr_df <- Data %>%
+  group_by(GenTrea) %>%
+  summarize(
+    n   = sum(complete.cases(Dilution, BUN)),
+    R = suppressWarnings(cor(Dilution, BUN, method = "spearman", use = "pairwise.complete.obs")),
+    p   = suppressWarnings(cor.test(Dilution, BUN, method = "spearman")$p.value),
+    .groups = "drop"
+  ) %>%
+  mutate(label = sprintf("%s: R = %.2f, p = %.3g", GenTrea, R, p))
 
-# Glomerular Nbl1, NA
-glom_plot_nbl1_NA <- ggplot(data_G_NA, aes(x = Genotype, y = Nbl1_Red, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Nbl1 Glomerular Expression by Genotype in Nbl1 KO Mice with XLAS",
-       x = "Genotype",
-       y= "Nbl1 RNA Expression")
-print(glom_plot_nbl1_NA)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Glomerular Nbl1 Expression, NA
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Nbl1_Red ~ (1|SampleName), data=data_G_NA, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Nbl1_Red ~ Genotype + (1|SampleName), data=data_G_NA, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-# Data: data_G_NA
-# Models:
-# Percent.null: Nbl1_Red ~ (1 | SampleName)
-# Percent.model: Nbl1_Red ~ Genotype + (1 | SampleName)
-# npar    AIC    BIC  logLik -2*log(L) Chisq Df Pr(>Chisq)  
-# Percent.null     3 420.69 426.98 -207.35    414.69                      
-# Percent.model    4 417.73 426.11 -204.87    409.73 4.963  1     0.0259 *
-# Get R2 values
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: 0.275
-# Marginal R2: 0.197
-## Genotype does affect Glomerular Nbl1 Expression (Chi-square(1)=4.963, p=0.0259*)
+# 2) Choose a label position per group (quantiles keep text inside panel)
+label_pos <- Data %>%
+  group_by(GenTrea) %>%
+  summarize(
+    x_lab = quantile(Dilution, 0.06, na.rm = TRUE),
+    y_lab = quantile(BUN,   0.94, na.rm = TRUE),
+    .groups = "drop"
+  )
 
-# Glomerular Nbl1, Cis
-glom_plot_nbl1_Cis <- ggplot(data_G_Cis, aes(x = Genotype, y = Nbl1_Red, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Nbl1 Glomerular Expression by Genotype in Nbl1 KO Mice Treated with Cisplatin",
-       x = "Genotype",
-       y= "Nbl1 RNA Expression")
-print(glom_plot_nbl1_Cis)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Glomerular Nbl1 Expression, Cis
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Nbl1_Red ~ (1|SampleName), data=data_G_Cis, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Nbl1_Red ~ Genotype + (1|SampleName), data=data_G_Cis, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-# Data: data_G_Cis
-# Models:
-# Percent.null: Nbl1_Red ~ (1 | SampleName)
-# Percent.model: Nbl1_Red ~ Genotype + (1 | SampleName)
-# npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(>Chisq)    
-# Percent.null     3 588.90 595.65 -291.45    582.90                         
-# Percent.model    4 574.04 583.03 -283.02    566.04 16.866  1  4.011e-05 ***
-# Get R2 values
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: NA
-# Marginal R2: 0.364
-## Genotype does affect Glomerular Nbl1 Expression (Chi-square(1)=16.866, p=4.011e-05***)
+# Merge stats and positions
+lab_df <- left_join(corr_df, label_pos, by = "GenTrea")
 
-# Glomerular Nbl1, PBS ## Check significance & try removing outlier S-630-22
-glom_plot_nbl1_PBS <- ggplot(data_G_PBS, aes(x = Genotype, y = Nbl1_Red, color = SampleName, shape = SampleName)) +
-  geom_point() +
-  geom_jitter(position = position_jitter(width = 0.2, height = 0)) +
-  scale_shape_manual(values = 1:19) + # Manually specify shapes
-  scale_y_continuous(limits = c(0,100)) +
-  labs(title = "Nbl1 Glomerular Expression by Genotype in Nbl1 KO Mice Treated with PBS",
-       x = "Genotype",
-       y= "Nbl1 RNA Expression")
-print(glom_plot_nbl1_PBS)
-## Using a Linear Mixed Model Approach
-# Let's start by looking at Glomerular Nbl1 Expression, PBS
-# First run the model assuming genotype does not play a role.
-Percent.null = lmer(Nbl1_Red ~ (1|SampleName), data=data_G_PBS, REML=FALSE)
-# Then run the model adding the genotype
-Percent.model = lmer(Nbl1_Red ~ Genotype + (1|SampleName), data=data_G_PBS, REML=FALSE)
-# Compare the models to see if they are significantly different. 
-anova(Percent.null,Percent.model)
-# Data: data_G_PBS
-# Models:
-# Percent.null: Nbl1_Red ~ (1 | SampleName)
-# Percent.model: Nbl1_Red ~ Genotype + (1 | SampleName)
-# npar    AIC    BIC  logLik -2*log(L)  Chisq Df Pr(>Chisq)  
-# Percent.null     3 406.02 412.30 -200.01    400.02                       
-# Percent.model    4 402.25 410.62 -197.12    394.25 5.7722  1    0.01628 *
-r2_values <- r2(Percent.model)
-print(r2_values)
-# Conditional R2: 0.643
-# Marginal R2: 0.422
-## Genotype does affect Glomerular Nbl1 Expression (Chi-square(1)=5.7722, p=0.01628*)
+# 3) Plot: remove the overall stat; add per‑group labels
+
+p <- ggplot(Data, aes(x = Result, y = BUN, shape = GenTrea)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.20) +
+  ggrepel::geom_label_repel(
+    data = lab_df,
+    aes(x = x_lab, y = y_lab, label = label, shape = GenTrea),
+    fill = scales::alpha("white", 0.90),  # legible background
+    label.size = 0,                        # no border line
+    size = 3.9, fontface = "italic",
+    min.segment.length = 0,
+    max.overlaps = Inf,
+    box.padding = 0.3,
+    point.padding = 0.2,
+    label.padding = unit(0.15, "lines"),
+    show.legend = FALSE
+  ) +
+  scale_shape_manual(values = c(16,17,15,5)) +
+  labs(title = "Correlation BUN and NBL1", x = "NBL1 levels", y = "BUN", shape = "GenTrea", fill = "GenTrea") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "top", legend.title = element_text(face = "bold"),
+        plot.title = element_text(face = "bold"), panel.grid.minor = 
+          element_blank())
+
+p
+ggsave("BUN_NBL1_per_group_stats.png", p, width = 7, height = 6, dpi = 300)
 ```
